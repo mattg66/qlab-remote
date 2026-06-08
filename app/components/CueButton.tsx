@@ -2,22 +2,31 @@
 
 import type { QLabCue } from "@/lib/qlab/types";
 
-/** Maps QLab's named cue colors to Tailwind classes for the button accent. */
-const COLOR_CLASSES: Record<string, string> = {
-  none: "border-zinc-300 dark:border-zinc-700",
-  red: "border-red-500",
-  orange: "border-orange-500",
-  yellow: "border-yellow-400",
-  green: "border-green-500",
-  blue: "border-blue-500",
-  purple: "border-purple-500",
-  pink: "border-pink-500",
-  gray: "border-gray-400",
-  grey: "border-gray-400",
+const BG_COLORS: Record<string, string> = {
+  none:   "bg-zinc-800 hover:bg-zinc-700 active:bg-zinc-600",
+  red:    "bg-red-700 hover:bg-red-600 active:bg-red-500",
+  orange: "bg-orange-600 hover:bg-orange-500 active:bg-orange-400",
+  yellow: "bg-yellow-500 hover:bg-yellow-400 active:bg-yellow-300",
+  green:  "bg-green-700 hover:bg-green-600 active:bg-green-500",
+  blue:   "bg-blue-700 hover:bg-blue-600 active:bg-blue-500",
+  purple: "bg-purple-700 hover:bg-purple-600 active:bg-purple-500",
+  pink:   "bg-pink-600 hover:bg-pink-500 active:bg-pink-400",
+  gray:   "bg-zinc-600 hover:bg-zinc-500 active:bg-zinc-400",
+  grey:   "bg-zinc-600 hover:bg-zinc-500 active:bg-zinc-400",
 };
 
-function colorClass(colorName: string): string {
-  return COLOR_CLASSES[colorName.toLowerCase()] ?? COLOR_CLASSES.none;
+const TEXT_COLORS: Record<string, string> = {
+  none:   "text-zinc-100",
+  yellow: "text-yellow-900",
+  default: "text-white",
+};
+
+function bgClass(colorName: string): string {
+  return BG_COLORS[colorName.toLowerCase()] ?? BG_COLORS.none;
+}
+
+function textClass(colorName: string): string {
+  return TEXT_COLORS[colorName.toLowerCase()] ?? TEXT_COLORS.default;
 }
 
 interface CueButtonProps {
@@ -28,22 +37,23 @@ interface CueButtonProps {
 
 export function CueButton({ cue, onTrigger, onStop }: CueButtonProps) {
   const displayName = cue.name || cue.listName || "Untitled cue";
+  const text = textClass(cue.colorName);
 
   return (
     <button
       type="button"
       onClick={() => cue.isRunning ? onStop(cue.uniqueID) : onTrigger(cue.uniqueID)}
-      className={`flex flex-col items-start gap-1 rounded-lg border-l-4 bg-white px-4 py-3 text-left shadow-sm transition-colors hover:bg-zinc-50 active:bg-zinc-100 dark:bg-zinc-900 dark:hover:bg-zinc-800 dark:active:bg-zinc-700 ${colorClass(
-        cue.colorName,
-      )} ${cue.isRunning ? "ring-2 ring-green-500" : ""}`}
+      className={`flex min-h-28 w-full flex-col justify-between rounded-xl p-4 text-left shadow-md transition-colors ${bgClass(cue.colorName)} ${cue.isRunning ? "ring-4 ring-white/80" : ""}`}
     >
-      <span className="text-xs text-zinc-500 dark:text-zinc-400">{cue.number || "—"}</span>
-      <span className="font-medium text-zinc-900 dark:text-zinc-50">{displayName}</span>
-      {cue.isRunning && (
-        <span className="text-xs font-semibold uppercase tracking-wide text-green-600 dark:text-green-400">
-          Running — tap to stop
-        </span>
-      )}
+      <span className={`text-sm font-medium opacity-70 ${text}`}>{cue.number || "—"}</span>
+      <div className="flex flex-col gap-1">
+        <span className={`text-base font-semibold leading-snug ${text}`}>{displayName}</span>
+        {cue.isRunning && (
+          <span className="text-xs font-bold uppercase tracking-widest text-white/80">
+            Running — tap to stop
+          </span>
+        )}
+      </div>
     </button>
   );
 }

@@ -54,6 +54,7 @@ export class QLabConnection extends EventEmitter {
   private refreshTimer: ReturnType<typeof setTimeout> | null = null;
   private pollTimer: ReturnType<typeof setInterval> | null = null;
   private closed = false;
+  private rawCueLists: RawCueDictionary[] | null = null;
 
   start(): void {
     this.closed = false;
@@ -132,7 +133,7 @@ export class QLabConnection extends EventEmitter {
       // Fire-and-forget — QLab replies "error" but still registers the subscription.
       client.send(`/workspace/${this.config.workspaceId}/updates`, [oscInt(1)]);
 
-      await this.refreshCarts();
+      await this.refreshStructure();
 
       this.reconnectAttempt = 0;
       this.setState({ status: "connected", workspaceId: this.config.workspaceId, message: null });
@@ -152,10 +153,13 @@ export class QLabConnection extends EventEmitter {
    * We don't need to parse which cue changed — just debounce a full refresh.
    */
   private subscribeToUpdates(client: QLabOscClient): void {
-    const updatePrefix = `/update/workspace/${this.config.workspaceId}`;
+    const workspaceUpdate = `/update/workspace/${this.config.workspaceId}`;
+    const cueUpdate = `${workspaceUpdate}/cue_id/`;
     client.onMessage((message) => {
-      if (message.address.startsWith(updatePrefix)) {
+      if (message.address.startsWith(cueUpdate)) {
         this.scheduleRefresh();
+      } else if (message.address.startsWith(workspaceUpdate)) {
+        this.scheduleStructureRefresh();
       }
     });
   }
@@ -164,32 +168,54 @@ export class QLabConnection extends EventEmitter {
     if (this.refreshTimer) return;
     this.refreshTimer = setTimeout(() => {
       this.refreshTimer = null;
-      void this.refreshCarts();
+      void this.refreshRunning();
     }, REFRESH_DEBOUNCE_MS);
   }
 
-  private async refreshCarts(): Promise<void> {
+  private scheduleStructureRefresh(): void {
+    if (this.refreshTimer) return;
+    this.refreshTimer = setTimeout(() => {
+      this.refreshTimer = null;
+      void this.refreshStructure();
+    }, REFRESH_DEBOUNCE_MS);
+  }
+
+  // Full structural refresh: cue lists. Run once on connect,
+  // and again if QLab pushes a workspace-level update notification.
+  private async refreshStructure(): Promise<void> {
     const client = this.client;
     if (!client) return;
 
-    const [cueLists, runningOrPaused] = await Promise.all([
-      client.request(`/workspace/${this.config.workspaceId}/cueLists`),
-      client.request(`/workspace/${this.config.workspaceId}/runningOrPausedCues`),
-    ]);
+    const cueLists = await client.request(`/workspace/${this.config.workspaceId}/cueLists`);
+    this.rawCueLists = asCueArray(cueLists);
+    await this.refreshRunning();
+  }
+
+  // Fast poll: just running state, reuses cached structure.
+  private async refreshRunning(): Promise<void> {
+    const client = this.client;
+    if (!client || !this.rawCueLists) return;
+
+    const runningOrPaused = await client.request(`/workspace/${this.config.workspaceId}/runningOrPausedCues`);
 
     const runningIds = new Set<string>();
     for (const cue of asCueArray(runningOrPaused)) {
       if (cue.uniqueID !== undefined) runningIds.add(cue.uniqueID);
     }
 
-    const carts = extractCarts(asCueArray(cueLists), runningIds);
+    const carts = extractCarts(this.rawCueLists, runningIds);
     this.setState({ carts });
+  }
+
+  private async refreshCarts(): Promise<void> {
+    return this.refreshRunning();
   }
 
   private handleConnectFailure(err: Error): void {
     this.stopPolling();
     this.client?.close();
     this.client = null;
+    this.rawCueLists = null;
     this.setState({ status: "disconnected", message: err.message });
     this.scheduleReconnect();
   }
@@ -202,6 +228,7 @@ export class QLabConnection extends EventEmitter {
     if (this.closed) return;
     this.client = null;
     this.stopPolling();
+    this.rawCueLists = null;
     this.setState({ status: "disconnected", message: "Connection to QLab closed" });
     this.scheduleReconnect();
   };
@@ -234,7 +261,7 @@ function asCueArray(data: unknown): RawCueDictionary[] {
   return Array.isArray(data) ? (data as RawCueDictionary[]) : [];
 }
 
-/** Walks the cueLists tree and collects every cue list/group of type "Cart". */
+/** Walks the cueLists tree and collects every Cart. */
 function extractCarts(roots: RawCueDictionary[], runningIds: Set<string>): QLabCart[] {
   const carts: QLabCart[] = [];
 
