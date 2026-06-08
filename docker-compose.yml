@@ -1,0 +1,13 @@
+services:
+  qlab-remote:
+    build: .
+    ports:
+      - "${PORT:-3000}:3000"
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      QLAB_HOST: ${QLAB_HOST}
+      QLAB_PORT: ${QLAB_PORT:-53000}
+      QLAB_PASSCODE: ${QLAB_PASSCODE:-}
+      QLAB_WORKSPACE_ID: ${QLAB_WORKSPACE_ID}
+    restart: unless-stopped
