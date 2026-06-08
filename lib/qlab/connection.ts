@@ -1,5 +1,5 @@
 import { EventEmitter } from "events";
-import { QLabOscClient } from "./osc-client";
+import { QLabOscClient, oscInt, oscString } from "./osc-client";
 import {
   initialQLabState,
   type QLabCart,
@@ -29,6 +29,7 @@ interface RawCueDictionary {
 const RECONNECT_BASE_DELAY_MS = 1000;
 const RECONNECT_MAX_DELAY_MS = 30_000;
 const REFRESH_DEBOUNCE_MS = 250;
+const POLL_INTERVAL_MS = 1000;
 
 function readConfig(): QLabConfig {
   return {
@@ -51,6 +52,7 @@ export class QLabConnection extends EventEmitter {
   private reconnectAttempt = 0;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private refreshTimer: ReturnType<typeof setTimeout> | null = null;
+  private pollTimer: ReturnType<typeof setInterval> | null = null;
   private closed = false;
 
   start(): void {
@@ -62,6 +64,7 @@ export class QLabConnection extends EventEmitter {
     this.closed = true;
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
     if (this.refreshTimer) clearTimeout(this.refreshTimer);
+    this.stopPolling();
     this.client?.close();
     this.client = null;
   }
@@ -70,12 +73,37 @@ export class QLabConnection extends EventEmitter {
     return this.state;
   }
 
-  /** Triggers a cue (typically a cart cue) by its uniqueID via /cue_id/{id}/start. */
   triggerCue(cueId: string): void {
-    if (this.state.status !== "connected" || !this.client) {
-      return;
-    }
+    if (!this.client) return;
     this.client.send(`/cue_id/${cueId}/start`);
+    // Refresh immediately so UI reflects the running state without waiting for next poll.
+    this.scheduleRefresh();
+  }
+
+  stopCue(cueId: string): void {
+    if (!this.client) return;
+    this.client.send(`/cue_id/${cueId}/stop`);
+    this.scheduleRefresh();
+  }
+
+  stopAll(): void {
+    if (!this.client) return;
+    this.client.send(`/workspace/${this.config.workspaceId}/hardStop`);
+    this.scheduleRefresh();
+  }
+
+  private startPolling(): void {
+    this.stopPolling();
+    this.pollTimer = setInterval(() => {
+      void this.refreshCarts();
+    }, POLL_INTERVAL_MS);
+  }
+
+  private stopPolling(): void {
+    if (this.pollTimer) {
+      clearInterval(this.pollTimer);
+      this.pollTimer = null;
+    }
   }
 
   private async connectOnce(): Promise<void> {
@@ -96,24 +124,26 @@ export class QLabConnection extends EventEmitter {
 
     try {
       await client.connect();
-      client.onError(this.handleTransportError);
-      client.onClose(this.handleTransportClose);
+      client.onError((err) => { if (this.client === client) this.handleTransportError(err); });
+      client.onClose(() => { if (this.client === client) this.handleTransportClose(); });
 
       await this.authenticate(client);
-      await client.request(`/workspace/${this.config.workspaceId}/updates`, [1]);
       this.subscribeToUpdates(client);
+      // Fire-and-forget — QLab replies "error" but still registers the subscription.
+      client.send(`/workspace/${this.config.workspaceId}/updates`, [oscInt(1)]);
 
       await this.refreshCarts();
 
       this.reconnectAttempt = 0;
       this.setState({ status: "connected", workspaceId: this.config.workspaceId, message: null });
+      this.startPolling();
     } catch (err) {
       this.handleConnectFailure(err as Error);
     }
   }
 
   private async authenticate(client: QLabOscClient): Promise<void> {
-    const args = this.config.passcode ? [this.config.passcode] : [];
+    const args = this.config.passcode ? [oscString(this.config.passcode)] : [];
     await client.request(`/workspace/${this.config.workspaceId}/connect`, args);
   }
 
@@ -149,17 +179,15 @@ export class QLabConnection extends EventEmitter {
 
     const runningIds = new Set<string>();
     for (const cue of asCueArray(runningOrPaused)) {
-      if (cue.uniqueID !== undefined) {
-        runningIds.add(cue.uniqueID);
-      }
+      if (cue.uniqueID !== undefined) runningIds.add(cue.uniqueID);
     }
 
     const carts = extractCarts(asCueArray(cueLists), runningIds);
-
     this.setState({ carts });
   }
 
   private handleConnectFailure(err: Error): void {
+    this.stopPolling();
     this.client?.close();
     this.client = null;
     this.setState({ status: "disconnected", message: err.message });
@@ -173,6 +201,7 @@ export class QLabConnection extends EventEmitter {
   private handleTransportClose = (): void => {
     if (this.closed) return;
     this.client = null;
+    this.stopPolling();
     this.setState({ status: "disconnected", message: "Connection to QLab closed" });
     this.scheduleReconnect();
   };
@@ -193,7 +222,10 @@ export class QLabConnection extends EventEmitter {
   }
 
   private setState(patch: Partial<QLabState>): void {
-    this.state = { ...this.state, ...patch };
+    const next = { ...this.state, ...patch };
+    // Skip broadcasting if nothing actually changed.
+    if (JSON.stringify(next) === JSON.stringify(this.state)) return;
+    this.state = next;
     this.emit("state", this.state);
   }
 }

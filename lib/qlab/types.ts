@@ -36,7 +36,10 @@ export const initialQLabState: QLabState = {
 };
 
 /** Messages sent from the browser to the server over the WebSocket. */
-export type ClientMessage = { type: "trigger"; cueId: string };
+export type ClientMessage =
+  | { type: "trigger"; cueId: string }
+  | { type: "stop"; cueId: string }
+  | { type: "stopAll" };
 
 /** Messages sent from the server to the browser over the WebSocket. */
 export type ServerMessage = { type: "state"; state: QLabState };

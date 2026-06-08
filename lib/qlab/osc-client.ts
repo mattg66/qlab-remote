@@ -1,4 +1,4 @@
-import { TCPSocketPort, type OscMessage } from "osc";
+import { TCPSocketPort, type OscMessage, type OscArgument } from "osc";
 
 export interface PendingReply {
   resolve: (data: unknown) => void;
@@ -14,6 +14,9 @@ export interface QLabReply {
 }
 
 const REPLY_TIMEOUT_MS = 5000;
+
+export const oscString = (value: string): OscArgument => ({ type: "s", value });
+export const oscInt = (value: number): OscArgument => ({ type: "i", value });
 
 /**
  * Thin wrapper around osc.js's SLIP-framed TCP port that adds
@@ -74,7 +77,7 @@ export class QLabOscClient {
   }
 
   /** Sends an OSC message and resolves with QLab's JSON reply for that address. */
-  request(address: string, args: unknown[] = []): Promise<unknown> {
+  request(address: string, args: OscArgument[] = []): Promise<unknown> {
     if (!this.port) {
       return Promise.reject(new Error("OSC client is not connected"));
     }
@@ -95,7 +98,7 @@ export class QLabOscClient {
   }
 
   /** Sends an OSC message without waiting for a reply. */
-  send(address: string, args: unknown[] = []): void {
+  send(address: string, args: OscArgument[] = []): void {
     this.port?.send({ address, args });
   }
 

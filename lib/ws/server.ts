@@ -13,9 +13,15 @@ function parseClientMessage(raw: unknown): ClientMessage | null {
   if (typeof raw !== "string") return null;
 
   try {
-    const parsed = JSON.parse(raw);
-    if (parsed && parsed.type === "trigger" && typeof parsed.cueId === "string") {
-      return parsed as ClientMessage;
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    if (parsed.type === "trigger" && typeof parsed.cueId === "string") {
+      return { type: "trigger", cueId: parsed.cueId };
+    }
+    if (parsed.type === "stop" && typeof parsed.cueId === "string") {
+      return { type: "stop", cueId: parsed.cueId };
+    }
+    if (parsed.type === "stopAll") {
+      return { type: "stopAll" };
     }
   } catch {
     // Ignore malformed messages from the browser.
@@ -47,9 +53,10 @@ export function attachQLabWebSocketServer(httpServer: HttpServer): WebSocketServ
 
     socket.on("message", (raw) => {
       const message = parseClientMessage(raw.toString());
-      if (message?.type === "trigger") {
-        connection.triggerCue(message.cueId);
-      }
+      if (!message) return;
+      if (message.type === "trigger") connection.triggerCue(message.cueId);
+      else if (message.type === "stop") connection.stopCue(message.cueId);
+      else if (message.type === "stopAll") connection.stopAll();
     });
   });
 

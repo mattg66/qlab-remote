@@ -20,20 +20,28 @@ function colorClass(colorName: string): string {
   return COLOR_CLASSES[colorName.toLowerCase()] ?? COLOR_CLASSES.none;
 }
 
-export function CueButton({ cue, onTrigger }: { cue: QLabCue; onTrigger: (cueId: string) => void }) {
+interface CueButtonProps {
+  cue: QLabCue;
+  onTrigger: (cueId: string) => void;
+  onStop: (cueId: string) => void;
+}
+
+export function CueButton({ cue, onTrigger, onStop }: CueButtonProps) {
+  const displayName = cue.name || cue.listName || "Untitled cue";
+
   return (
     <button
       type="button"
-      onClick={() => onTrigger(cue.uniqueID)}
+      onClick={() => cue.isRunning ? onStop(cue.uniqueID) : onTrigger(cue.uniqueID)}
       className={`flex flex-col items-start gap-1 rounded-lg border-l-4 bg-white px-4 py-3 text-left shadow-sm transition-colors hover:bg-zinc-50 active:bg-zinc-100 dark:bg-zinc-900 dark:hover:bg-zinc-800 dark:active:bg-zinc-700 ${colorClass(
         cue.colorName,
       )} ${cue.isRunning ? "ring-2 ring-green-500" : ""}`}
     >
       <span className="text-xs text-zinc-500 dark:text-zinc-400">{cue.number || "—"}</span>
-      <span className="font-medium text-zinc-900 dark:text-zinc-50">{cue.name || "Untitled cue"}</span>
+      <span className="font-medium text-zinc-900 dark:text-zinc-50">{displayName}</span>
       {cue.isRunning && (
         <span className="text-xs font-semibold uppercase tracking-wide text-green-600 dark:text-green-400">
-          Running
+          Running — tap to stop
         </span>
       )}
     </button>

@@ -5,7 +5,7 @@ import { CueButton } from "@/app/components/CueButton";
 import { useQLabSocket } from "@/app/hooks/useQLabSocket";
 
 export default function Home() {
-  const { state, trigger } = useQLabSocket();
+  const { state, trigger, stop } = useQLabSocket();
 
   return (
     <div className="flex flex-1 flex-col bg-zinc-50 dark:bg-black">
@@ -32,7 +32,7 @@ export default function Home() {
                 </h2>
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
                   {cart.cues.map((cue) => (
-                    <CueButton key={cue.uniqueID} cue={cue} onTrigger={trigger} />
+                    <CueButton key={cue.uniqueID} cue={cue} onTrigger={trigger} onStop={stop} />
                   ))}
                 </div>
               </section>

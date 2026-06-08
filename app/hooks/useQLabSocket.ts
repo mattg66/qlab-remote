@@ -62,13 +62,16 @@ export function useQLabSocket() {
     };
   }, []);
 
-  const trigger = (cueId: string) => {
+  const send = (message: ClientMessage) => {
     const socket = socketRef.current;
     if (socket?.readyState === WebSocket.OPEN) {
-      const message: ClientMessage = { type: "trigger", cueId };
       socket.send(JSON.stringify(message));
     }
   };
 
-  return { state, trigger };
+  const trigger = (cueId: string) => send({ type: "trigger", cueId });
+  const stop = (cueId: string) => send({ type: "stop", cueId });
+  const stopAll = () => send({ type: "stopAll" });
+
+  return { state, trigger, stop, stopAll };
 }
