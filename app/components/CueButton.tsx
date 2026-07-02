@@ -43,7 +43,7 @@ export function CueButton({ cue, onTrigger, onStop }: CueButtonProps) {
     <button
       type="button"
       onClick={() => cue.isRunning ? onStop(cue.uniqueID) : onTrigger(cue.uniqueID)}
-      className={`flex min-h-28 w-full flex-col justify-between rounded-xl p-4 text-left shadow-md transition-colors ${bgClass(cue.colorName)} ${cue.isRunning ? "ring-4 ring-white/80" : ""}`}
+      className={`flex min-h-48 w-full flex-col justify-between rounded-xl p-5 text-left shadow-md transition-colors ${bgClass(cue.colorName)} ${cue.isRunning ? "ring-4 ring-white/80" : ""}`}
     >
       <span className={`text-sm font-medium opacity-70 ${text}`}>{cue.number || "—"}</span>
       <div className="flex flex-col gap-1">
