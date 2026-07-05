@@ -47,7 +47,7 @@ export function CueButton({ cue, onTrigger, onStop }: CueButtonProps) {
     >
       <span className={`text-sm font-medium opacity-70 ${text}`}>{cue.number || "—"}</span>
       <div className="flex flex-col gap-1">
-        <span className={`text-base font-semibold leading-snug ${text}`}>{displayName}</span>
+        <span className={`text-xl font-semibold leading-snug ${text}`}>{displayName}</span>
         {cue.isRunning && (
           <span className="text-xs font-bold uppercase tracking-widest text-white/80">
             Running — tap to stop
